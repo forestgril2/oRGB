@@ -2,6 +2,7 @@
 #define TRANSFORMORGB_H
 
 #include <QObject>
+#include <QMatrix3x3>
 
 class TransformORGB : public QObject
 {
@@ -13,7 +14,10 @@ public:
 signals:
     void fileReady(QString filePath);
 
-public slots:
+private:
+    QMatrix3x3 toORGB;
+    QMatrix3x3 fromORGB;
+
 };
 
 #endif // TRANSFORMORGB_H
