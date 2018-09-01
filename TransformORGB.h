@@ -2,7 +2,7 @@
 #define TRANSFORMORGB_H
 
 #include <QObject>
-#include <QMatrix3x3>
+#include <QMatrix4x4>
 
 class TransformORGB : public QObject
 {
@@ -15,8 +15,11 @@ signals:
     void fileReady(QString filePath);
 
 private:
-    QMatrix3x3 toORGB;
-    QMatrix3x3 fromORGB;
+    const QMatrix4x4 toLCC = {0.299,  0.587, 0.114, 0,
+                                0.5,    0.5,  -1.0, 0,
+                              0.866, -0.866,   0.0, 0,
+                                  0,      0,     0, 0};
+    QMatrix4x4 fromLCC;
 
 };
 
