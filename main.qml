@@ -3,6 +3,8 @@ import QtQuick.Window 2.2
 import QtQuick.Dialogs 1.2
 import QtQuick.Controls 2.0
 
+import orgb 1.0
+
 Window {
     id: oRGB
 
@@ -66,15 +68,8 @@ Window {
         }
     }
 
-    Item {
+    TransformORGB {
         id: transformer
-        signal fileReady(string filePath)
-
-        function transform(filePath) {
-
-            console.log(" ### file being transformed")
-            fileReady(filePath)
-        }
     }
 
     function showFile(filePath) {
