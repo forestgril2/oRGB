@@ -3,6 +3,8 @@
 
 #include <QObject>
 #include <QMatrix4x4>
+#include <QImage>
+#include <functional>
 
 class TransformORGB : public QObject
 {
@@ -20,12 +22,8 @@ private:
                               0.866, -0.866,     0.0, 0,
                                   0,      0,       0, 1};
 
-    QMatrix4x4 fromLCC     = {  1.0,  0.114,  0.7436, 0,
-                                1.0,  0.114, -0.4111, 0,
-                                1.0, -0.866,  0.1663, 0,
-                                  0,      0,       0, 1};
-
-    void transformPixels(QImage &image, QMatrix4x4 toLCC);
+    void transformPixels(QImage& image, std::function<void(QRgb&)>);
+    void matrixTransformPixel(QRgb& pixel, const QMatrix4x4& matrix);
 };
 
 #endif // TRANSFORMORGB_H
