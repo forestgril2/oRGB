@@ -90,9 +90,16 @@ void TransformORGB::transform(QString filePath)
         return rot*pixelLCC;
     };
 
+    //Transform to oRGB
     std::transform(pixels.begin(), pixels.end(), pixels.begin(),
                    bind(hueRotation, placeholders::_1, compressHueAngle));
 
+    //Adjust hue
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+                   [&](QVector3D p) {return QVector3D(p.x(), p.y()+25, p.z());});
+
+
+    //Transform back to LCC
     std::transform(pixels.begin(), pixels.end(), pixels.begin(),
                    bind(hueRotation, placeholders::_1, decompressHueAngle));
 
