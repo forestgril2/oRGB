@@ -6,10 +6,14 @@
 #include <QImage>
 #include <functional>
 #include <vector>
+#include <utility>
 
 class TransformORGB : public QObject
 {
     Q_OBJECT
+
+    typedef std::pair<QVector3D,QVector3D> Edge;
+
 public:
     explicit TransformORGB(QObject *parent = nullptr);
     Q_INVOKABLE void transform(QString filePath);
@@ -28,6 +32,8 @@ private:
     static double compressHueAngle(double theta);
     static double decompressHueAngle(double theta);
     static QVector3D hueRotation(QVector3D pixelLCC, std::function<double(double)> angleTransform);
+    void rescaleHue(std::vector<QVector3D>& pixelsLCC);
+    std::vector<QVector3D> hueBoundary(std::vector<QVector3D> vertices, std::vector<Edge> edges, float luma);
 };
 
 #endif // TRANSFORMORGB_H
