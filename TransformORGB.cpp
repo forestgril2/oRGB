@@ -64,13 +64,22 @@ void TransformORGB::transform(QString filePath)
     std::transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](QVector3D p) {return QVector3D(toLCC * p.toVector4D());} );
 
-    auto hueRotation = [&](QVector3D pixelLCC) {
+    auto compressHueAngle = [](double theta) {
+        return theta < (M_PI/3) ? (3.*theta/2.) :
+                                  M_PI_2 + 0.75*(theta - M_PI/3);
+    };
+
+    auto decompressHueAngle = [](double theta) {
+        return theta < (M_PI_2) ? (2.*theta/3.) :
+                                  M_PI/3. + (4./3.)*(theta - M_PI_2);
+    };
+
+    auto hueRotation = [](QVector3D pixelLCC, function<double(double)> angleTransform) {
         double theta = static_cast<double>(atan2(pixelLCC.z(), pixelLCC.y())); //(-Pi, Pi)
         int sign = signbit(theta) ? -1 : 1;
         theta *= sign;
 
-        double newTheta = theta < (M_PI/3) ? (3.*theta/2.) :
-                                             M_PI_2 + 0.75*(theta - M_PI/3);
+        double newTheta = angleTransform(theta);
 
         theta *= sign;
         newTheta *= sign;
@@ -81,25 +90,11 @@ void TransformORGB::transform(QString filePath)
         return rot*pixelLCC;
     };
 
-    auto hueRotationBack = [&](QVector3D pixelLCC) {
-        double theta = static_cast<double>(atan2(pixelLCC.z(), pixelLCC.y())); //(-Pi, Pi)
-        int sign = signbit(theta) ? -1 : 1;
-        theta *= sign;
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+                   bind(hueRotation, placeholders::_1, compressHueAngle));
 
-        double newTheta = theta < (M_PI_2) ? (2.*theta/3.) :
-                                             M_PI/3. + (4./3.)*(theta - M_PI_2);
-
-        theta *= sign;
-        newTheta *= sign;
-
-        QMatrix4x4 rot;
-        rot.rotate(static_cast<float>(theta - newTheta), QVector3D(1.,0.,0.));
-
-        return rot*pixelLCC;
-    };
-
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(), hueRotation);
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(), hueRotationBack);
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+                   bind(hueRotation, placeholders::_1, decompressHueAngle));
 
     std::transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](QVector3D p) {return QVector3D(toLCC.inverted() * p.toVector4D());} );
