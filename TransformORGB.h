@@ -23,7 +23,7 @@ private:
                                   0,      0,       0, 1};
 
     void transformPixels(QImage& image, std::function<void(QRgb&)>);
-    void matrixTransformPixel(QRgb& pixel, const QMatrix4x4& matrix);
+    QVector3D matrixTransformFloatPixel(QVector3D& pixel, const QMatrix4x4& matrix);
 };
 
 #endif // TRANSFORMORGB_H

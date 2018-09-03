@@ -12,16 +12,9 @@ TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
 {
 }
 
-void TransformORGB::matrixTransformPixel(QRgb& pixel, const QMatrix4x4& matrix)
+QVector3D TransformORGB::matrixTransformFloatPixel(QVector3D& pixel, const QMatrix4x4& matrix)
 {
-    QVector3D pixelRGB_vals = {static_cast<float>(qRed(pixel)),
-                               static_cast<float>(qGreen(pixel)),
-                               static_cast<float>(qBlue(pixel))};
-
-    QVector3D pixelLCC_vals = QVector3D(matrix * pixelRGB_vals.toVector4D());
-    pixel = qRgb(static_cast<int>(round(pixelLCC_vals.x())),
-                 static_cast<int>(round(pixelLCC_vals.y())),
-                 static_cast<int>(round(pixelLCC_vals.z())));
+    return QVector3D(matrix * pixel.toVector4D());
 }
 
 void TransformORGB::transformPixels(QImage& image, function<void(QRgb&)> transform)
@@ -51,70 +44,70 @@ void TransformORGB::transform(QString filePath)
         qDebug() << " ### Error loading file: " << truncatedPath;
     }
 
-    transformPixels(image, [&](QRgb& pixel){matrixTransformPixel(pixel, toLCC);});
-
-    vector<QRgb> pixels;
+    using pixelLCC = QVector3D;
+    vector<pixelLCC> pixels;
     pixels.resize(static_cast<size_t>(image.width() * image.height()));
-    for (int y = 0; y < image.height(); ++y)
+    for (int hy = 0; hy < image.height(); ++hy)
     {
-       for (int x = 0; x < image.width(); ++x)
+       for (int wx = 0; wx < image.width(); ++wx)
        {
-          pixels[static_cast<size_t>(y*image.width() + x)] = image.pixel(x, y);
+          pixels[static_cast<size_t>(hy*image.width() + wx)].setX(qRed(image.pixel(wx, hy)));
+          pixels[static_cast<size_t>(hy*image.width() + wx)].setY(qGreen(image.pixel(wx, hy)));
+          pixels[static_cast<size_t>(hy*image.width() + wx)].setZ(qBlue(image.pixel(wx, hy)));
        }
     }
 
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+                   [&](QVector3D p) {return QVector3D(toLCC * p.toVector4D());} );
 
-    auto luma = [](QRgb p){return qRed(p);};
-    auto minMax = minmax_element(pixels.begin(), pixels.end(),
-                                 [&](QRgb a, QRgb b){return luma(a) < luma(b);});
-    auto lMin = luma(*minMax.first);
-    auto lMax = luma(*minMax.second);
-
-    double aveLuma = (pow(pixels.size(), -1) *
-                      accumulate(pixels.begin(), pixels.end(), 0, [&](int sum, QRgb add){return sum + luma(add);}));
-
-    auto compressLuma = [&](QRgb& p) {
-        double l = luma(p);
-        int c1 = qGreen(p);
-        int c2 = qBlue(p);
-        double beta = 2.0/3.0;
-
-        if ((l > aveLuma) && (lMax > 1.0))
-        {
-            l = aveLuma + (1.0 - aveLuma) * pow((l - aveLuma) / (lMax - aveLuma), beta);
-            return qRgb(static_cast<int>(round(l)), c1, c2);
-        }
-        else if ((l <= aveLuma) && (lMin < 1.0))
-        {
-            l = aveLuma * (1.0 - pow((l - aveLuma) / (lMin - aveLuma), beta));
-            return qRgb(static_cast<int>(round(l)), c1, c2);
-        }
-        return p;
-    };
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
-
-//    QRgb pixel;
 //    auto luma = [](QRgb p){return qRed(p);};
-//    for (int i = 0; i< image.width(); ++i)
+//    auto minMax = minmax_element(pixels.begin(), pixels.end(),
+//                                 [&](QRgb a, QRgb b){return luma(a) < luma(b);});
+//    auto lMin = luma(*minMax.first);
+//    auto lMax = luma(*minMax.second);
+
+//    double aveLuma = (pow(pixels.size(), -1) *
+//                      accumulate(pixels.begin(), pixels.end(), 0, [&](int sum, QRgb add){return sum + luma(add);}));
+
+//    auto compressLuma = [&](QRgb& p) {
+//        double l = luma(p);
+//        int c1 = qGreen(p);
+//        int c2 = qBlue(p);
+//        double beta = 2.0/3.0;
+
+//        if ((l > aveLuma) && (lMax > 255))
+//        {
+//            l = aveLuma + (1.0 - aveLuma) * pow((l - aveLuma) / (lMax - aveLuma), beta);
+//            return qRgb(static_cast<int>(round(l)), c1, c2);
+//        }
+//        else if ((l <= aveLuma) && (lMin < 255))
+//        {
+//            l = aveLuma * (1.0 - pow((l - aveLuma) / (lMin - aveLuma), beta));
+//            return qRgb(static_cast<int>(round(l)), c1, c2);
+//        }
+//        return p;
+//    };
+//    std::transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
+
+//    for (int y = 0; y < image.height(); ++y)
 //    {
-//       for (int j = 0; j< image.height(); ++j)
+//       for (int x = 0; x < image.width(); ++x)
 //       {
-//          pixel = image.pixel(i, j);
-//          int L = luma(pixel);
-
-
-
-//          image.setPixel(i, j, pixel);
+//          image.setPixel(x, y, pixels[static_cast<size_t>(y*image.width() + x)]);
 //       }
 //    }
 
-    transformPixels(image, [&](QRgb& pixel){matrixTransformPixel(pixel, toLCC.inverted());});
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+                   [&](QVector3D p) {return QVector3D(toLCC.inverted() * p.toVector4D());} );
 
-    for (int y = 0; y < image.height(); ++y)
+    for (int hy = 0; hy < image.height(); ++hy)
     {
-       for (int x = 0; x < image.width(); ++x)
+       for (int wx = 0; wx < image.width(); ++wx)
        {
-          image.setPixel(x, y, pixels[static_cast<size_t>(y*image.width() + x)]);
+          auto pixelRGB = pixels[static_cast<size_t>(hy*image.width() + wx)];
+          image.setPixel(wx, hy, qRgb(static_cast<int>(round(pixelRGB.x())),
+                                      static_cast<int>(round(pixelRGB.y())),
+                                      static_cast<int>(round(pixelRGB.z()))));
        }
     }
 
@@ -128,6 +121,5 @@ void TransformORGB::transform(QString filePath)
         qDebug() << " ### Error saving file: " << transformedPath;
     }
 
-
-    emit fileReady(transformedPath);
+    emit fileReady("file:///" + transformedPath);
 }
