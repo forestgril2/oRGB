@@ -33,9 +33,12 @@ private:
     static double decompressHueAngle(double theta);
     static QVector3D hueRotation(QVector3D pixelLCC, std::function<double(double)> angleTransform);
     void rescaleHue(std::vector<QVector3D>& pixelsLCC);
-    std::vector<QVector3D> hueBoundary(std::vector<QVector3D> vertices, std::vector<Edge> edges, float luma);
-    std::vector<int> activeEdges(const std::vector<QVector3D>& vertices, const std::vector<Edge>& edges, float luma);
+    std::vector<QVector3D> hueBoundaryVertices(float luma);
+    std::vector<int> activeEdges(float luma);
     static bool ascendingLuma(QVector3D a, QVector3D b);
+
+    std::vector<Edge> edges; //to keep paralellepiped edges - sorted
+    std::vector<QVector3D> vertices; //to keep paralellepiped vertices - sorted
 };
 
 #endif // TRANSFORMORGB_H

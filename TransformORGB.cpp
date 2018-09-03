@@ -10,7 +10,7 @@ using namespace std;
 
 TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
 {
-    vector<Edge> edges =
+    edges =
     {{{0,0,0}, {1,0,0}}, {{0,0,0}, {0,1,0}}, {{1,0,0}, {1,1,0}}, {{0,1,0}, {1,1,0}},  //lower rgb cube base
      {{0,0,0}, {0,0,1}}, {{1,0,0}, {1,0,1}}, {{0,1,0}, {0,1,1}}, {{1,1,0}, {1,1,1}},  //bases' connections
      {{0,0,1}, {1,0,1}}, {{0,0,1}, {0,1,1}}, {{1,0,1}, {1,1,1}}, {{0,1,1}, {1,1,1}}}; //upper rgb cube base
@@ -29,40 +29,41 @@ TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
     //finally sort in ascending first vertex luma order
     sort(edges.begin(), edges.end(), [](Edge a, Edge b){return ascendingLuma(a.first, b.first);});
 
-    vector<QVector3D> vertices = {{0,0,0}, {1,0,0}, {0,1,0}, {1,1,0},  //lower rgb cube base
-                                  {0,0,1}, {1,0,1}, {0,1,1}, {1,1,1}}; //upper rgb cube base
+    vertices = {{0,0,0}, {1,0,0}, {0,1,0}, {1,1,0},  //lower rgb cube base
+                {0,0,1}, {1,0,1}, {0,1,1}, {1,1,1}}; //upper rgb cube base
 
     std::transform(vertices.begin(), vertices.end(), vertices.begin(),
                    [&](QVector3D v){return toLCC*v;}); // LCC parallelepiped vertices
 
     sort(vertices.begin(), vertices.end(), ascendingLuma); // sort by luma
-
-    activeEdges(vertices, 0.0);
 }
 
-std::vector<int> TransformORGB::activeEdges(const std::vector<QVector3D>& vertices, float luma)
-{
-    if (qFuzzyCompare(luma,0)) return {0};
+std::vector<int> TransformORGB::activeEdges(float luma)
+{//edge, crossing given luma plane, create vertices, which bound the LCC gamut
+    if (qFuzzyCompare(luma,0)) return {};
     else if (luma < vertices[1].x()) return {0,1,2};   //up to 0.114
     else if (luma < vertices[2].x()) return {0,1,3,4}; //up to 0.299
     else if (luma < vertices[3].x()) return {1,3,4,5,6}; //up to 0.413
-    else if (luma < vertices[3].x()) return {1,4,5,7}; //up to 0.587
-    else if (luma < vertices[3].x()) return {4,5,7,8,9}; //up to 0.701
-    else if (luma < vertices[3].x()) return {5,7,8,10}; //up to 0.886
-    else if (luma < vertices[3].x()) return {7,10,11}; //up to 1.
+    else if (luma < vertices[4].x()) return {1,4,5,7}; //up to 0.587
+    else if (luma < vertices[5].x()) return {4,5,7,8,9}; //up to 0.701
+    else if (luma < vertices[6].x()) return {5,7,8,10}; //up to 0.886
+    else if (luma < vertices[7].x()) return {7,10,11}; //up to 1.
+    else return {};
 }
 
-vector<QVector3D> TransformORGB::hueBoundary(std::vector<QVector3D> vertices, std::vector<Edge> edges, float luma)
+vector<QVector3D> TransformORGB::hueBoundaryVertices(float luma)
 {//returns a set of vertices, defining LCC hue boundary for a given luma[0,1]
-
-    vector<QVector3D> lumaCrosses(edges.size());
-
-    std::transform(edges.begin(), edges.end(), lumaCrosses.begin(), [&](Edge e){
-        return e.second - e.first;
-    });
-
-
-    return vector<QVector3D>();
+    vector<QVector3D> ret;
+    QVector3D diff;
+    float t = 0;
+    auto edgeIndexes = activeEdges(luma);
+    for (auto k : edgeIndexes)
+    {
+        diff = edges[k].second - edges[k].first;
+        t = (luma - edges[k].first.x())/(diff.x());
+        ret.push_back(edges[k].first + t*(diff));
+    }
+    return ret;
 }
 
 void TransformORGB::rescaleHue(vector<QVector3D>& pixelsLCC)
