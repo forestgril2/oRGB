@@ -81,8 +81,29 @@ void TransformORGB::transform(QString filePath)
         return rot*pixelLCC;
     };
 
+    auto hueRotationBack = [&](QVector3D pixelLCC) {
+        double theta = static_cast<double>(atan2(pixelLCC.z(), pixelLCC.y())); //(-Pi, Pi)
+        int sign = signbit(theta) ? -1 : 1;
+        theta *= sign;
+
+        double newTheta = theta < (M_PI_2) ? (2.*theta/3.) :
+                                             M_PI/3. + (4./3.)*(theta - M_PI_2);
+
+        theta *= sign;
+        newTheta *= sign;
+
+        QMatrix4x4 rot;
+        rot.rotate(static_cast<float>(theta - newTheta), QVector3D(1.,0.,0.));
+
+        return rot*pixelLCC;
+    };
+
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(), hueRotation);
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(), hueRotationBack);
+
     std::transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](QVector3D p) {return QVector3D(toLCC.inverted() * p.toVector4D());} );
+
 
     fillImageWithFloatPixels(image, pixels);
 
