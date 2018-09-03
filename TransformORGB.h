@@ -5,6 +5,7 @@
 #include <QMatrix4x4>
 #include <QImage>
 #include <functional>
+#include <vector>
 
 class TransformORGB : public QObject
 {
@@ -22,8 +23,8 @@ private:
                               0.866, -0.866,     0.0, 0,
                                   0,      0,       0, 1};
 
-    void transformPixels(QImage& image, std::function<void(QRgb&)>);
-    QVector3D matrixTransformFloatPixel(QVector3D& pixel, const QMatrix4x4& matrix);
+    std::vector<QVector3D> extractFloatRGBPixels(const QImage& image);
+    void fillImageWithFloatPixels(QImage& image, const std::vector<QVector3D>& floatPixels);
 };
 
 #endif // TRANSFORMORGB_H
