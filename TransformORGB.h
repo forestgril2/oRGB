@@ -34,6 +34,8 @@ private:
     static QVector3D hueRotation(QVector3D pixelLCC, std::function<double(double)> angleTransform);
     void rescaleHue(std::vector<QVector3D>& pixelsLCC);
     std::vector<QVector3D> hueBoundary(std::vector<QVector3D> vertices, std::vector<Edge> edges, float luma);
+    std::vector<int> activeEdges(const std::vector<QVector3D>& vertices, const std::vector<Edge>& edges, float luma);
+    static bool ascendingLuma(QVector3D a, QVector3D b);
 };
 
 #endif // TRANSFORMORGB_H
