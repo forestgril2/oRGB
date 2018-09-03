@@ -12,8 +12,8 @@ TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
 }
 
 vector<QVector3D> TransformORGB::extractFloatRGBPixels(const QImage& image)
-{
-    vector<QVector3D> pixels; //float should be enough
+{//float should be enough
+    vector<QVector3D> pixels;
     pixels.resize(static_cast<size_t>(image.width() * image.height()));
     QRgb pixelRGB;
     for (int hy = 0; hy < image.height(); ++hy)
@@ -64,34 +64,22 @@ void TransformORGB::transform(QString filePath)
     std::transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](QVector3D p) {return QVector3D(toLCC * p.toVector4D());} );
 
-//    auto luma = [](QRgb p){return qRed(p);};
-//    auto minMax = minmax_element(pixels.begin(), pixels.end(),
-//                                 [&](QRgb a, QRgb b){return luma(a) < luma(b);});
-//    auto lMin = luma(*minMax.first);
-//    auto lMax = luma(*minMax.second);
+    auto hueRotation = [&](QVector3D pixelLCC) {
+        double theta = static_cast<double>(atan2(pixelLCC.z(), pixelLCC.y())); //(-Pi, Pi)
+        int sign = signbit(theta) ? -1 : 1;
+        theta *= sign;
 
-//    double aveLuma = (pow(pixels.size(), -1) *
-//                      accumulate(pixels.begin(), pixels.end(), 0, [&](int sum, QRgb add){return sum + luma(add);}));
+        double newTheta = theta < (M_PI/3) ? (3.*theta/2.) :
+                                             M_PI_2 + 0.75*(theta - M_PI/3);
 
-//    auto compressLuma = [&](QRgb& p) {
-//        double l = luma(p);
-//        int c1 = qGreen(p);
-//        int c2 = qBlue(p);
-//        double beta = 2.0/3.0;
+        theta *= sign;
+        newTheta *= sign;
 
-//        if ((l > aveLuma) && (lMax > 255))
-//        {
-//            l = aveLuma + (1.0 - aveLuma) * pow((l - aveLuma) / (lMax - aveLuma), beta);
-//            return qRgb(static_cast<int>(round(l)), c1, c2);
-//        }
-//        else if ((l <= aveLuma) && (lMin < 255))
-//        {
-//            l = aveLuma * (1.0 - pow((l - aveLuma) / (lMin - aveLuma), beta));
-//            return qRgb(static_cast<int>(round(l)), c1, c2);
-//        }
-//        return p;
-//    };
-//    std::transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
+        QMatrix4x4 rot;
+        rot.rotate(static_cast<float>(theta - newTheta), QVector3D(1.,0.,0.));
+
+        return rot*pixelLCC;
+    };
 
     std::transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](QVector3D p) {return QVector3D(toLCC.inverted() * p.toVector4D());} );
@@ -110,3 +98,32 @@ void TransformORGB::transform(QString filePath)
 
     emit fileReady("file:///" + transformedPath);
 }
+
+//    auto luma = [](QRgb p){return qRed(p);};
+//    auto minMax = minmax_element(pixels.begin(), pixels.end(),
+//                                 [&](QRgb a, QRgb b){return luma(a) < luma(b);});
+//    auto lMin = luma(*minMax.first);
+//    auto lMax = luma(*minMax.second);
+
+//    double aveLuma = (pow(pixels.size(), -1) *
+//                      accumulate(pixels.begin(), pixels.end(), 0, [&](int sum, QRgb add){return sum + luma(add);}));
+
+//    auto compressLuma = [&](QRgb& p) {
+//        double l = luma(p);
+//        int c1 = qGreen(p);
+//        int c2 = qBlue(p);
+//        double beta = 2./3.;
+
+//        if ((l > aveLuma) && (lMax > 255))
+//        {
+//            l = aveLuma + (1. - aveLuma) * pow((l - aveLuma) / (lMax - aveLuma), beta);
+//            return qRgb(static_cast<int>(round(l)), c1, c2);
+//        }
+//        else if ((l <= aveLuma) && (lMin < 255))
+//        {
+//            l = aveLuma * (1. - pow((l - aveLuma) / (lMin - aveLuma), beta));
+//            return qRgb(static_cast<int>(round(l)), c1, c2);
+//        }
+//        return p;
+//    };
+//    std::transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
