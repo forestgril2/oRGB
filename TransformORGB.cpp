@@ -4,6 +4,7 @@
 #include <cmath>
 #include <algorithm>
 #include <vector>
+#include <utility>
 
 using namespace std;
 
@@ -28,7 +29,7 @@ void TransformORGB::transformPixels(QImage& image, function<void(QRgb&)> transfo
     QRgb pixel;
     for (int i = 0; i < image.width(); ++i)
     {
-       for (int j = 0; j< image.height(); ++j)
+       for (int j = 0; j < image.height(); ++j)
        {
           pixel = image.pixel(i, j);
           transform(pixel);
@@ -50,9 +51,47 @@ void TransformORGB::transform(QString filePath)
         qDebug() << " ### Error loading file: " << truncatedPath;
     }
 
-//    qDebug() << " ### Image format: " << image.format(); //Format_RGB32
-
     transformPixels(image, [&](QRgb& pixel){matrixTransformPixel(pixel, toLCC);});
+
+    vector<QRgb> pixels;
+    pixels.resize(static_cast<size_t>(image.width() * image.height()));
+    for (int y = 0; y < image.height(); ++y)
+    {
+       for (int x = 0; x < image.width(); ++x)
+       {
+          pixels[static_cast<size_t>(y*image.width() + x)] = image.pixel(x, y);
+       }
+    }
+
+
+    auto luma = [](QRgb p){return qRed(p);};
+    auto minMax = minmax_element(pixels.begin(), pixels.end(),
+                                 [&](QRgb a, QRgb b){return luma(a) < luma(b);});
+    auto lMin = luma(*minMax.first);
+    auto lMax = luma(*minMax.second);
+
+    double aveLuma = (pow(pixels.size(), -1) *
+                      accumulate(pixels.begin(), pixels.end(), 0, [&](int sum, QRgb add){return sum + luma(add);}));
+
+    auto compressLuma = [&](QRgb& p) {
+        double l = luma(p);
+        int c1 = qGreen(p);
+        int c2 = qBlue(p);
+        double beta = 2.0/3.0;
+
+        if ((l > aveLuma) && (lMax > 1.0))
+        {
+            l = aveLuma + (1.0 - aveLuma) * pow((l - aveLuma) / (lMax - aveLuma), beta);
+            return qRgb(static_cast<int>(round(l)), c1, c2);
+        }
+        else if ((l <= aveLuma) && (lMin < 1.0))
+        {
+            l = aveLuma * (1.0 - pow((l - aveLuma) / (lMin - aveLuma), beta));
+            return qRgb(static_cast<int>(round(l)), c1, c2);
+        }
+        return p;
+    };
+    std::transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
 
 //    QRgb pixel;
 //    auto luma = [](QRgb p){return qRed(p);};
@@ -70,6 +109,14 @@ void TransformORGB::transform(QString filePath)
 //    }
 
     transformPixels(image, [&](QRgb& pixel){matrixTransformPixel(pixel, toLCC.inverted());});
+
+    for (int y = 0; y < image.height(); ++y)
+    {
+       for (int x = 0; x < image.width(); ++x)
+       {
+          image.setPixel(x, y, pixels[static_cast<size_t>(y*image.width() + x)]);
+       }
+    }
 
     QString transformedPath = truncatedPath;
     int dotPosition = truncatedPath.indexOf(".");
