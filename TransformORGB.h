@@ -25,6 +25,9 @@ private:
 
     std::vector<QVector3D> extractFloatRGBPixels(const QImage& image);
     void fillImageWithFloatPixels(QImage& image, const std::vector<QVector3D>& floatPixels);
+    static double compressHueAngle(double theta);
+    static double decompressHueAngle(double theta);
+    static QVector3D hueRotation(QVector3D pixelLCC, std::function<double(double)> angleTransform);
 };
 
 #endif // TRANSFORMORGB_H
