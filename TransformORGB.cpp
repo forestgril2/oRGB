@@ -119,6 +119,13 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
         prepareParalellepiped();
     }
     auto vertices = hueBoundaryVertices(pixel.x());
+    using angleVertexPair = pair<float, Pixel3f>;
+    vector<angleVertexPair> pairs(vertices.size());
+    auto getPositiveAngle = [](float alpha) { return alpha >= 0 ? alpha : float(2*M_PI) - alpha; };
+    transform(vertices.begin(), vertices.end(), pairs.begin(),
+              [&](const Pixel3f& p) { return make_pair(getPositiveAngle(atan2(p.z(), p.y())), p); });
+    sort(pairs.begin(), pairs.end(),
+         [](const angleVertexPair& a, const angleVertexPair& b) { return a.first < b.first; });
 
     return pixel;
 }
