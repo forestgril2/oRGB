@@ -27,7 +27,7 @@ private:
 
     std::vector<Pixel3f> extractPixels(const QImage& image);
     void fillImage(QImage& image, const std::vector<Pixel3f>& floatPixels);
-    const float rgbMax = 255.f;
+    static const float rgbMax;
 
     static double compressHueAngle(double theta);
     static double decompressHueAngle(double theta);

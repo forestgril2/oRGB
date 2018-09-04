@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <set>
 #include <unordered_set>
+#include <QFile>
 
 using namespace std;
 
@@ -18,6 +19,8 @@ std::vector<TransformORGB::Pixel3f> TransformORGB::vertices =
 {{0,0,0}, {1,0,0}, {0,1,0}, {1,1,0},  //lower rgb cube base
 {0,0,1}, {1,0,1}, {0,1,1}, {1,1,1}}; //upper rgb cube base
 
+const float TransformORGB::rgbMax = 255.f;
+
 const QMatrix4x4 TransformORGB::toLCC = {0.299f,  0.587f, 0.114f, 0,
                                             0.5,     0.5,   -1.0, 0,
                                          0.866f, -0.866f,    0.0, 0,
@@ -25,6 +28,11 @@ const QMatrix4x4 TransformORGB::toLCC = {0.299f,  0.587f, 0.114f, 0,
 
 TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
 {
+}
+
+QString vertexForScatterPlot(const QVector3D& v)
+{
+    return QString("ListElement{ xPos: ") + QString::number(v.x()) + " ; yPos: " + QString::number(v.y()) + " ; zPos: " + QString::number(v.z()) + "}";
 }
 
 void TransformORGB::prepareParalellepiped()
@@ -83,6 +91,19 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
     if (!paralelepipedPrepared)
     {
         prepareParalellepiped();
+
+        QFile file("E:\\DaneIProgramy\\GRZESIA\\PROGRAMOWANIE\\Projects\\oRGB_Sopic_Task\\edges_for_luma.txt");
+        file.open(QIODevice::ReadWrite);
+        QTextStream stream( &file );
+        for (int i = 0; i <= rgbMax; i+=1)
+        {
+            auto vertices = hueBoundaryVertices(float(i)/rgbMax);
+            for (int j = 0; j < vertices.size(); ++j)
+            {
+                stream << vertexForScatterPlot(vertices[j]) << "\r\n";
+            }
+        }
+        file.close();
     }
 
     return pixel;
