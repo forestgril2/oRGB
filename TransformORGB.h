@@ -34,7 +34,7 @@ private:
     static Pixel3f hueRotation(Pixel3f pixelLCC, std::function<double(double)> angleTransform);
     static Pixel3f clampHue(const Pixel3f& pixel);
     static std::vector<Pixel3f> hueBoundaryVertices(float pixelLuma);
-    static std::vector<int> activeEdges(float pixelLuma);
+    static std::vector<unsigned> activeEdges(float pixelLuma);
     static float pixelLuma(Pixel3f p) { return p.x(); }
     static bool ascendingLuma(Pixel3f a, Pixel3f b);
     static void prepareParalellepiped();

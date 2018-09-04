@@ -75,7 +75,7 @@ void TransformORGB::prepareParalellepiped()
 //    file.close();
 }
 
-std::vector<int> TransformORGB::activeEdges(float luma)
+std::vector<unsigned> TransformORGB::activeEdges(float luma)
 {// edge, crossing given luma plane, create vertices, which bound the LCC gamut
  // could be created automatically ... but this is good enough for this task
     if (qFuzzyCompare(luma, 0.f)) return {};
@@ -91,6 +91,11 @@ std::vector<int> TransformORGB::activeEdges(float luma)
 
 vector<TransformORGB::Pixel3f> TransformORGB::hueBoundaryVertices(float luma)
 {//returns a set of vertices, defining LCC hue boundary for a given luma<0,1>
+    if (!paralelepipedPrepared)
+    {
+        prepareParalellepiped();
+    }
+
     if (qFuzzyCompare(luma, 0.f))
     {
         return {{0,0,0}};
@@ -114,10 +119,11 @@ vector<TransformORGB::Pixel3f> TransformORGB::hueBoundaryVertices(float luma)
 
 TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
 {
-    if (!paralelepipedPrepared)
-    {
-        prepareParalellepiped();
+    if (qFuzzyCompare(pixel.y(), 0) && qFuzzyCompare(pixel.y(), 0))
+    {//handle special case, neutral grey hu, always inside the paralellepiped
+        return pixel;
     }
+
     auto vertices = hueBoundaryVertices(pixel.x());
     using angleVertexPair = pair<float, Pixel3f>;
     vector<angleVertexPair> pairs(vertices.size());
@@ -127,6 +133,53 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
     sort(pairs.begin(), pairs.end(),
          [](const angleVertexPair& a, const angleVertexPair& b) { return a.first < b.first; });
 
+    float angle;
+    for (unsigned i = 0; i < pairs.size(); ++i)
+    {
+        angle = getPositiveAngle(atan2(pixel.z(), pixel.y()));
+        auto& p1 = pairs[i];
+        auto& p2 = pairs[(i+1)%pairs.size()];
+        if (p1.first <= angle && angle < p2.first)
+        {//pixel has angle between these two vertices
+
+            //we need some simple maths for line section crossings
+            auto v = p1.second;
+            auto diff = p2.second - p1.second;
+            Pixel3f ret(pixel);
+
+            if (qFuzzyCompare(pixel.y(), 0))
+            {//handle special case, red-green axis only
+                float boundaryZ = pixel.z() * ((v.z() - diff.z() * (v.y()/diff.y())) / pixel.z());
+                if (pixel.z() > boundaryZ)
+                {
+                    ret.setZ(boundaryZ);
+                }
+            }
+            else if (qFuzzyCompare(pixel.z(), 0))
+            {//handle special case, blue-yellow axis only
+                float boundaryY = pixel.y() * ((v.y() - diff.y() * (v.z()/diff.z())) / pixel.y());
+                if (pixel.y() > boundaryY)
+                {
+                    ret.setY(boundaryY);
+                }
+            }
+            else
+            {
+                // otherwise get parameters from full linear solution
+                float tBound = (pixel.z()*v.y() - pixel.y()*v.z()) / (pixel.y()*diff.z() - pixel.z()*diff.y());
+                float tRadius = (v.y() + tBound*diff.y()) / pixel.y();
+
+                if (tRadius < 1)
+                {//need to scale down to paralelepiped boundary
+                    ret.setY(ret.y()*tRadius);
+                    ret.setZ(ret.z()*tRadius);
+                }
+            }
+
+            return ret;
+        }
+    }
+    qDebug() << " ### ERROR: Should never be here!"; // pixel should always fall to one of angles
     return pixel;
 }
 
