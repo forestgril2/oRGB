@@ -37,6 +37,7 @@ QString vertexForScatterPlot(const QVector3D& v)
 
 void TransformORGB::prepareParalellepiped()
 {// prepare parallelepiped' edges and vertices for hue clamping and scaling
+    /******* EDGES *******/
     transform(edges.begin(), edges.end(), edges.begin(),
                    [&](Edge e){return make_pair(toLCC*(e.first), toLCC*(e.second));}); // LCC parallelepiped edges
     transform(edges.begin(), edges.end(), edges.begin(),
@@ -51,16 +52,33 @@ void TransformORGB::prepareParalellepiped()
     //finally sort in ascending first vertex luma order
     sort(edges.begin(), edges.end(), [](Edge a, Edge b){return ascendingLuma(a.first, b.first);});
 
+    /******* VERTICES *******/
     transform(vertices.begin(), vertices.end(), vertices.begin(),
               [&](Pixel3f v){return toLCC*v;}); // LCC parallelepiped vertices
 
     sort(vertices.begin(), vertices.end(), ascendingLuma); // sort by luma
     paralelepipedPrepared = true;
+
+//     I LOVE THIS DEBUG TOO MUCH ;)
+//
+//    QFile file("E:\\DaneIProgramy\\GRZESIA\\PROGRAMOWANIE\\Projects\\oRGB_Sopic_Task\\edges_for_luma.txt");
+//    file.open(QIODevice::ReadWrite);
+//    QTextStream stream( &file );
+//    for (int i = 0; i <= 1024; i+=1)
+//    {
+//        auto vertices = hueBoundaryVertices(float(i)/1024);
+//        for (int j = 0; j < vertices.size(); ++j)
+//        {
+//            stream << vertexForScatterPlot(vertices[j]) << "\r\n";
+//        }
+//    }
+//    file.close();
 }
 
 std::vector<int> TransformORGB::activeEdges(float luma)
-{//edge, crossing given luma plane, create vertices, which bound the LCC gamut
-    if (qFuzzyCompare(luma,0)) return {};
+{// edge, crossing given luma plane, create vertices, which bound the LCC gamut
+ // could be created automatically ... but this is good enough for this task
+    if (qFuzzyCompare(luma, 0.f)) return {};
     else if (luma < vertices[1].x()) return {0,1,2};   //up to 0.114
     else if (luma < vertices[2].x()) return {0,1,3,4}; //up to 0.299
     else if (luma < vertices[3].x()) return {1,3,4,5,6}; //up to 0.413
@@ -72,7 +90,15 @@ std::vector<int> TransformORGB::activeEdges(float luma)
 }
 
 vector<TransformORGB::Pixel3f> TransformORGB::hueBoundaryVertices(float luma)
-{//returns a set of vertices, defining LCC hue boundary for a given luma[0,1]
+{//returns a set of vertices, defining LCC hue boundary for a given luma<0,1>
+    if (qFuzzyCompare(luma, 0.f))
+    {
+        return {{0,0,0}};
+    }
+    else if (qFuzzyCompare(luma, 1.f))
+    {
+        return {{1,0,0}};
+    }
     vector<Pixel3f> ret;
     Pixel3f diff;
     float t = 0;
@@ -80,8 +106,8 @@ vector<TransformORGB::Pixel3f> TransformORGB::hueBoundaryVertices(float luma)
     for (auto k : edgeIndexes)
     {
         diff = edges[k].second - edges[k].first;
-        t = (luma - edges[k].first.x())/(diff.x());
-        ret.push_back(edges[k].first + t*(diff));
+        t = (luma - edges[k].first.x()) / pixelLuma(diff);
+        ret.push_back(edges[k].first + t*diff);
     }
     return ret;
 }
@@ -91,20 +117,8 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
     if (!paralelepipedPrepared)
     {
         prepareParalellepiped();
-
-        QFile file("E:\\DaneIProgramy\\GRZESIA\\PROGRAMOWANIE\\Projects\\oRGB_Sopic_Task\\edges_for_luma.txt");
-        file.open(QIODevice::ReadWrite);
-        QTextStream stream( &file );
-        for (int i = 0; i <= rgbMax; i+=1)
-        {
-            auto vertices = hueBoundaryVertices(float(i)/rgbMax);
-            for (int j = 0; j < vertices.size(); ++j)
-            {
-                stream << vertexForScatterPlot(vertices[j]) << "\r\n";
-            }
-        }
-        file.close();
     }
+    auto vertices = hueBoundaryVertices(pixel.x());
 
     return pixel;
 }
@@ -173,7 +187,7 @@ TransformORGB::Pixel3f TransformORGB::hueRotation(Pixel3f pixelLCC, function<dou
 
 bool TransformORGB::ascendingLuma(Pixel3f a, Pixel3f b)
 {
-    return a.x() < b.x();
+    return pixelLuma(a) < pixelLuma(b);
 }
 
 void TransformORGB::run(QString filePath)
@@ -195,25 +209,7 @@ void TransformORGB::run(QString filePath)
     transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](Pixel3f p) {return Pixel3f(toLCC * p.toVector4D());} );
 
-    auto luma = [](Pixel3f p){return p.x();};
-    auto c1 = [](Pixel3f p){return p.y();};
-    auto c2 = [](Pixel3f p){return p.z();};
 
-    auto lumaMinMax = minmax_element(pixels.begin(), pixels.end(),
-         [](const Pixel3f& a, const Pixel3f& b){ return a.x() < b.x();});
-
-    auto lMin = luma(*lumaMinMax.first);
-    auto lMax = luma(*lumaMinMax.second);
-
-    auto c1MinMax = minmax_element(pixels.begin(), pixels.end(),
-                                 [&](const Pixel3f& a, const Pixel3f& b){return (c1(a) < c1(b));});
-    auto c1Min = c1(*c1MinMax.first);
-    auto c1Max = c1(*c1MinMax.second);
-
-    auto c2MinMax = minmax_element(pixels.begin(), pixels.end(),
-                                 [&](const Pixel3f& a, const Pixel3f& b){return (c2(a) < c2(b));});
-    auto c2Min = c2(*c2MinMax.first);
-    auto c2Max = c2(*c2MinMax.second);
 
     //Transform to oRGB
     transform(pixels.begin(), pixels.end(), pixels.begin(),
@@ -227,48 +223,39 @@ void TransformORGB::run(QString filePath)
     transform(pixels.begin(), pixels.end(), pixels.begin(),
                    bind(hueRotation, placeholders::_1, decompressHueAngle));
 
+    {//Make sure luma is in <0,1>
+        auto lumaMinMax = minmax_element(pixels.begin(), pixels.end(), ascendingLuma);
 
+        auto lMin = pixelLuma(*lumaMinMax.first);
+        auto lMax = pixelLuma(*lumaMinMax.second);
+
+        float aveLuma = (static_cast<float>(pow(pixels.size(), -1)) *
+                          accumulate(pixels.begin(), pixels.end(), 0,
+                                     [&](int sum, Pixel3f add){return sum + pixelLuma(add);}));
+
+        auto compressLuma = [&](Pixel3f& p) {
+            float l = pixelLuma(p);
+            float c1 = p.y();
+            float c2 = p.z();
+            float beta = 2.f/3.f;
+
+            if ((l > aveLuma) && (lMax > 1))
+            {
+                l = aveLuma + (1 - aveLuma) * static_cast<float>(pow((l - aveLuma)/(lMax - aveLuma), beta));
+                return Pixel3f(l, c1, c2);
+            }
+            else if ((l <= aveLuma) && (lMin < 1))
+            {
+                l = aveLuma * (1 - static_cast<float>(pow((l - aveLuma)/(lMin - aveLuma), beta)));
+                return Pixel3f(l, c1, c2);
+            }
+            return p;
+        };
+        transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
+    }
+
+    //clamp or scale hue, clamp for the beginning...
     transform(pixels.begin(), pixels.end(), pixels.begin(), clampHue);
-
-    lumaMinMax = minmax_element(pixels.begin(), pixels.end(),
-                                 [&](Pixel3f a, Pixel3f b){return luma(a) < luma(b);});
-    lMin = luma(*lumaMinMax.first);
-    lMax = luma(*lumaMinMax.second);
-
-    c1MinMax = minmax_element(pixels.begin(), pixels.end(),
-                                 [&](Pixel3f a, Pixel3f b){return c1(a) < c1(b);});
-    c1Min = c1(*c1MinMax.first);
-    c1Max = c1(*c1MinMax.second);
-
-    c2MinMax = minmax_element(pixels.begin(), pixels.end(),
-                                 [&](Pixel3f a, Pixel3f b){return c2(a) < c2(b);});
-    c2Min = c2(*c2MinMax.first);
-    c2Max = c2(*c2MinMax.second);
-
-    float aveLuma = (static_cast<float>(pow(pixels.size(), -1)) *
-                      accumulate(pixels.begin(), pixels.end(), 0,
-                                 [&](int sum, Pixel3f add){return sum + luma(add);}));
-
-    auto compressLuma = [&](Pixel3f& p) {
-        float l = luma(p);
-        float c1 = p.y();
-        float c2 = p.z();
-        float beta = 2.f/3.f;
-
-        if ((l > aveLuma) && (lMax > 1))
-        {
-            l = aveLuma + (1 - aveLuma) * static_cast<float>(pow((l - aveLuma)/(lMax - aveLuma), beta));
-            return Pixel3f(l, c1, c2);
-        }
-        else if ((l <= aveLuma) && (lMin < 1))
-        {
-            l = aveLuma * (1 - static_cast<float>(pow((l - aveLuma)/(lMin - aveLuma), beta)));
-            return Pixel3f(l, c1, c2);
-        }
-        return p;
-    };
-    //Make sure luma is in [0,1]
-    transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
 
     //Transform back to RGB
     transform(pixels.begin(), pixels.end(), pixels.begin(),
