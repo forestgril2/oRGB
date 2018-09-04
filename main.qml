@@ -78,6 +78,6 @@ Window {
 
     function transform(filePath) {
         transformer.fileReady.connect(oRGB.showFile)
-        transformer.transform(filePath)
+        transformer.run(filePath)
     }
 }

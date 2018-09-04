@@ -12,33 +12,35 @@ class TransformORGB : public QObject
 {
     Q_OBJECT
 
-    typedef std::pair<QVector3D,QVector3D> Edge;
 
 public:
+    typedef QVector3D Pixel3f; //float per color should be enough
+    typedef std::pair<Pixel3f, Pixel3f> Edge;
     explicit TransformORGB(QObject *parent = nullptr);
-    Q_INVOKABLE void transform(QString filePath);
+    Q_INVOKABLE void run(QString filePath);
 
 signals:
     void fileReady(QString filePath);
 
 private:
-    const QMatrix4x4 toLCC = {0.299,  0.587,   0.114, 0,
-                                0.5,    0.5,    -1.0, 0,
-                              0.866, -0.866,     0.0, 0,
-                                  0,      0,       0, 1};
+    const QMatrix4x4 toLCC = {0.299f,  0.587f, 0.114f, 0,
+                                 0.5,     0.5,   -1.0, 0,
+                              0.866f, -0.866f,    0.0, 0,
+                                   0,       0,      0, 1};
 
-    std::vector<QVector3D> extractFloatRGBPixels(const QImage& image);
-    void fillImageWithFloatPixels(QImage& image, const std::vector<QVector3D>& floatPixels);
+    std::vector<Pixel3f> extractPixels(const QImage& image);
+    void fillImage(QImage& image, const std::vector<Pixel3f>& floatPixels);
     static double compressHueAngle(double theta);
     static double decompressHueAngle(double theta);
-    static QVector3D hueRotation(QVector3D pixelLCC, std::function<double(double)> angleTransform);
-    void rescaleHue(std::vector<QVector3D>& pixelsLCC);
-    std::vector<QVector3D> hueBoundaryVertices(float luma);
+    static Pixel3f hueRotation(Pixel3f pixelLCC, std::function<double(double)> angleTransform);
+    void clampHue(std::vector<Pixel3f>& pixelsLCC);
+    std::vector<Pixel3f> hueBoundaryVertices(float luma);
     std::vector<int> activeEdges(float luma);
-    static bool ascendingLuma(QVector3D a, QVector3D b);
+    static bool ascendingLuma(Pixel3f a, Pixel3f b);
 
     std::vector<Edge> edges; //to keep paralellepiped edges - sorted
-    std::vector<QVector3D> vertices; //to keep paralellepiped vertices - sorted
+    std::vector<Pixel3f> vertices; //to keep paralellepiped vertices - sorted
+    const float rgbMax = 255.f;
 };
 
 #endif // TRANSFORMORGB_H
