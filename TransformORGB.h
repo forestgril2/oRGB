@@ -23,24 +23,24 @@ signals:
     void fileReady(QString filePath);
 
 private:
-    const QMatrix4x4 toLCC = {0.299f,  0.587f, 0.114f, 0,
-                                 0.5,     0.5,   -1.0, 0,
-                              0.866f, -0.866f,    0.0, 0,
-                                   0,       0,      0, 1};
+    static const QMatrix4x4 toLCC;
 
     std::vector<Pixel3f> extractPixels(const QImage& image);
     void fillImage(QImage& image, const std::vector<Pixel3f>& floatPixels);
+    const float rgbMax = 255.f;
+
     static double compressHueAngle(double theta);
     static double decompressHueAngle(double theta);
     static Pixel3f hueRotation(Pixel3f pixelLCC, std::function<double(double)> angleTransform);
-    void clampHue(std::vector<Pixel3f>& pixelsLCC);
-    std::vector<Pixel3f> hueBoundaryVertices(float luma);
-    std::vector<int> activeEdges(float luma);
+    static Pixel3f clampHue(const Pixel3f& pixel);
+    static std::vector<Pixel3f> hueBoundaryVertices(float luma);
+    static std::vector<int> activeEdges(float luma);
     static bool ascendingLuma(Pixel3f a, Pixel3f b);
+    static void prepareParalellepiped();
 
-    std::vector<Edge> edges; //to keep paralellepiped edges - sorted
-    std::vector<Pixel3f> vertices; //to keep paralellepiped vertices - sorted
-    const float rgbMax = 255.f;
+    static bool paralelepipedPrepared;
+    static std::vector<Edge> edges; //to keep paralellepiped edges - sorted
+    static std::vector<Pixel3f> vertices; //to keep paralellepiped vertices - sorted
 };
 
 #endif // TRANSFORMORGB_H

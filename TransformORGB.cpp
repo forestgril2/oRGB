@@ -8,16 +8,30 @@
 
 using namespace std;
 
-TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
-{// prepare parallelepiped' edges and vertices for hue clamping and scaling
-    edges =
-    {{{0,0,0}, {1,0,0}}, {{0,0,0}, {0,1,0}}, {{1,0,0}, {1,1,0}}, {{0,1,0}, {1,1,0}},  //lower rgb cube base
-     {{0,0,0}, {0,0,1}}, {{1,0,0}, {1,0,1}}, {{0,1,0}, {0,1,1}}, {{1,1,0}, {1,1,1}},  //bases' connections
-     {{0,0,1}, {1,0,1}}, {{0,0,1}, {0,1,1}}, {{1,0,1}, {1,1,1}}, {{0,1,1}, {1,1,1}}}; //upper rgb cube base
+bool TransformORGB::paralelepipedPrepared = false;
+std::vector<TransformORGB::Edge> TransformORGB::edges =
+{{{0,0,0}, {1,0,0}}, {{0,0,0}, {0,1,0}}, {{1,0,0}, {1,1,0}}, {{0,1,0}, {1,1,0}},  //lower rgb cube base
+ {{0,0,0}, {0,0,1}}, {{1,0,0}, {1,0,1}}, {{0,1,0}, {0,1,1}}, {{1,1,0}, {1,1,1}},  //bases' connections
+ {{0,0,1}, {1,0,1}}, {{0,0,1}, {0,1,1}}, {{1,0,1}, {1,1,1}}, {{0,1,1}, {1,1,1}}}; //upper rgb cube base
 
-    std::transform(edges.begin(), edges.end(), edges.begin(),
+std::vector<TransformORGB::Pixel3f> TransformORGB::vertices =
+{{0,0,0}, {1,0,0}, {0,1,0}, {1,1,0},  //lower rgb cube base
+{0,0,1}, {1,0,1}, {0,1,1}, {1,1,1}}; //upper rgb cube base
+
+const QMatrix4x4 TransformORGB::toLCC = {0.299f,  0.587f, 0.114f, 0,
+                                            0.5,     0.5,   -1.0, 0,
+                                         0.866f, -0.866f,    0.0, 0,
+                                              0,       0,      0, 1};
+
+TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
+{
+}
+
+void TransformORGB::prepareParalellepiped()
+{// prepare parallelepiped' edges and vertices for hue clamping and scaling
+    transform(edges.begin(), edges.end(), edges.begin(),
                    [&](Edge e){return make_pair(toLCC*(e.first), toLCC*(e.second));}); // LCC parallelepiped edges
-    std::transform(edges.begin(), edges.end(), edges.begin(),
+    transform(edges.begin(), edges.end(), edges.begin(),
                    [&](Edge e)
     {// let lower luma vertice always come first in edge
         if (!ascendingLuma(e.first, e.second))
@@ -29,13 +43,11 @@ TransformORGB::TransformORGB(QObject *parent) : QObject(parent)
     //finally sort in ascending first vertex luma order
     sort(edges.begin(), edges.end(), [](Edge a, Edge b){return ascendingLuma(a.first, b.first);});
 
-    vertices = {{0,0,0}, {1,0,0}, {0,1,0}, {1,1,0},  //lower rgb cube base
-                {0,0,1}, {1,0,1}, {0,1,1}, {1,1,1}}; //upper rgb cube base
-
-    std::transform(vertices.begin(), vertices.end(), vertices.begin(),
-                   [&](Pixel3f v){return toLCC*v;}); // LCC parallelepiped vertices
+    transform(vertices.begin(), vertices.end(), vertices.begin(),
+              [&](Pixel3f v){return toLCC*v;}); // LCC parallelepiped vertices
 
     sort(vertices.begin(), vertices.end(), ascendingLuma); // sort by luma
+    paralelepipedPrepared = true;
 }
 
 std::vector<int> TransformORGB::activeEdges(float luma)
@@ -66,12 +78,14 @@ vector<TransformORGB::Pixel3f> TransformORGB::hueBoundaryVertices(float luma)
     return ret;
 }
 
-void TransformORGB::clampHue(vector<Pixel3f>& pixelsLCC)
+TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
 {
-//    auto clampPixel = [](const Pixel3f& p) {
-//        return p;
-//    };
-//    std::transform(pixelsLCC.begin(), pixelsLCC.end(), pixelsLCC.begin(), clampPixel);
+    if (!paralelepipedPrepared)
+    {
+        prepareParalellepiped();
+    }
+
+    return pixel;
 }
 
 vector<TransformORGB::Pixel3f> TransformORGB::extractPixels(const QImage& image)
@@ -157,7 +171,7 @@ void TransformORGB::run(QString filePath)
     auto pixels = extractPixels(image);
 
     //Transform to LCC
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+    transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](Pixel3f p) {return Pixel3f(toLCC * p.toVector4D());} );
 
     auto luma = [](Pixel3f p){return p.x();};
@@ -181,19 +195,19 @@ void TransformORGB::run(QString filePath)
     auto c2Max = c2(*c2MinMax.second);
 
     //Transform to oRGB
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+    transform(pixels.begin(), pixels.end(), pixels.begin(),
                    bind(hueRotation, placeholders::_1, compressHueAngle));
 
     //Adjust hue
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+    transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](Pixel3f p) {return Pixel3f(p.x(), p.y(), p.z());});
 
     //Transform back to LCC
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+    transform(pixels.begin(), pixels.end(), pixels.begin(),
                    bind(hueRotation, placeholders::_1, decompressHueAngle));
 
 
-//    clampHue(pixels);
+    transform(pixels.begin(), pixels.end(), pixels.begin(), clampHue);
 
     lumaMinMax = minmax_element(pixels.begin(), pixels.end(),
                                  [&](Pixel3f a, Pixel3f b){return luma(a) < luma(b);});
@@ -233,10 +247,10 @@ void TransformORGB::run(QString filePath)
         return p;
     };
     //Make sure luma is in [0,1]
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
+    transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
 
     //Transform back to RGB
-    std::transform(pixels.begin(), pixels.end(), pixels.begin(),
+    transform(pixels.begin(), pixels.end(), pixels.begin(),
                    [&](Pixel3f p) {return Pixel3f(toLCC.inverted() * p.toVector4D());} );
 
 
