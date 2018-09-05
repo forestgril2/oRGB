@@ -124,6 +124,16 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
         return pixel;
     }
 
+    if (qFuzzyCompare(pixelLuma(pixel), 1.f))
+    {//for maximal luma, we have full white, neutral
+        return Pixel3f(1,0,0);
+    }
+
+    if (qFuzzyCompare(pixelLuma(pixel), 0.f))
+    {//for minimal luma, we have total black, neutral
+        return Pixel3f(0,0,0);
+    }
+
     auto vertices = hueBoundaryVertices(pixel.x());
     using angleVertexPair = pair<float, Pixel3f>;
     vector<angleVertexPair> pairs(vertices.size());
