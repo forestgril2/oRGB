@@ -23,7 +23,8 @@ signals:
 
 private:
     static std::vector<Pixel3f> extractPixels(const QImage& image);
-    static void fillImage(QImage& image, const std::vector<Pixel3f>& floatPixels);
+    static void writeToImage(QImage& image, const std::vector<Pixel3f>& floatPixels,
+                             unsigned startx = 0, unsigned starty = 0, unsigned wpix = 0);
 
     static void toORGB(const std::vector<Pixel3f>& source, std::vector<Pixel3f>& target);
     static void fromORGB(const std::vector<Pixel3f>& source, std::vector<Pixel3f>& target);

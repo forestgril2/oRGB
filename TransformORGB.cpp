@@ -275,17 +275,27 @@ void TransformORGB::fromORGB(const vector<Pixel3f>& source, vector<Pixel3f>& tar
                    [&](Pixel3f p) {return Pixel3f(toLCC.inverted() * p.toVector4D());} );
 }
 
-void TransformORGB::fillImage(QImage& image, const vector<QVector3D>& floatPixels)
+void TransformORGB::writeToImage(QImage& image, const vector<Pixel3f>& pixels,
+                                 unsigned startx, unsigned starty, unsigned wpix)
 {
+    unsigned w = static_cast<unsigned>(image.width());
+    unsigned h = static_cast<unsigned>(image.height());
+    unsigned nx = wpix;
+    unsigned ny = pixels.size()/wpix;
+    nx = (nx > w - startx) ? w - startx : nx;
+    ny = (ny > h - starty) ? h - starty : ny;
+
     QVector3D pixelRGB;
-    for (int hy = 0; hy < image.height(); ++hy)
+    for (unsigned y = starty; y < starty + ny; ++y)
     {
-       for (int wx = 0; wx < image.width(); ++wx)
+       for (unsigned x = startx; x < startx + nx; ++x)
        {
-          pixelRGB = floatPixels[static_cast<size_t>(hy*image.width() + wx)];
-          image.setPixel(wx, hy, qRgb(static_cast<int>(round(pixelRGB.x()*rgbMax)),
-                                      static_cast<int>(round(pixelRGB.y()*rgbMax)),
-                                      static_cast<int>(round(pixelRGB.z()*rgbMax))));
+          pixelRGB = pixels[static_cast<size_t>((y-starty)*wpix + (x-startx))];
+
+          image.setPixel(static_cast<int>(x), static_cast<int>(y),
+                         qRgb(static_cast<int>(round(pixelRGB.x()*rgbMax)),
+                              static_cast<int>(round(pixelRGB.y()*rgbMax)),
+                              static_cast<int>(round(pixelRGB.z()*rgbMax))));
        }
     }
 }
@@ -326,32 +336,31 @@ bool TransformORGB::ascendingLuma(Pixel3f a, Pixel3f b)
 
 void TransformORGB::run(QString filePath)
 {
-    qDebug() << " ### file: " << filePath << " is being transformed";
-
     QString truncatedPath = filePath;
     truncatedPath.replace("file:///", "");
 
-    QImage image;
-    if (!image.load(truncatedPath))
+    QImage srcImg;
+    if (!srcImg.load(truncatedPath))
     {
         qDebug() << " ### Error loading file: " << truncatedPath;
     }
 
-    auto pixels = extractPixels(image);
+    auto pixels = extractPixels(srcImg);
     toORGB(pixels, pixels);
     //Adjust hue
     transform(pixels.begin(), pixels.end(), pixels.begin(),
-                   [&](Pixel3f p) {return Pixel3f(p.x(), p.y(), p.z()-0.2);});
+                   [&](Pixel3f p) {return Pixel3f(p.x(), p.y(), p.z() -0.2);});
 
     fromORGB(pixels, pixels);
-    fillImage(image, pixels);
+
+    QImage targetImg(srcImg.width()*3, srcImg.height()*3, srcImg.format());
+    writeToImage(targetImg, pixels, srcImg.width(), srcImg.height(), srcImg.width());
 
     QString transformedPath = truncatedPath;
     int dotPosition = truncatedPath.indexOf(".");
 
     transformedPath.insert(dotPosition, "_transformed");
-    QImage imageLCC(image);
-    if (!imageLCC.save(transformedPath))
+    if (!targetImg.save(transformedPath))
     {
         qDebug() << " ### Error saving file: " << transformedPath;
     }
