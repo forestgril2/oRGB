@@ -1,10 +1,10 @@
 #include "TransformORGB.h"
 #include <QDebug>
 #include <QVector3D>
-#include <cmath>
 #include <algorithm>
 #include <set>
 #include <unordered_set>
+#include <tuple>
 #include <QFile>
 
 using namespace std;
@@ -117,6 +117,12 @@ vector<TransformORGB::Pixel3f> TransformORGB::hueBoundaryVertices(float luma)
     return ret;
 }
 
+float TransformORGB::getPositiveAngle(const Pixel3f& pixel)
+{
+    float angle = atan2(pixel.z(), pixel.y());
+    return angle >= 0 ? angle : static_cast<float>(2*M_PI) + angle;
+}
+
 TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
 {
     if (qFuzzyCompare(pixel.y(), 0) && qFuzzyCompare(pixel.y(), 0))
@@ -137,13 +143,12 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
     auto vertices = hueBoundaryVertices(pixel.x());
     using angleVertexPair = pair<float, Pixel3f>;
     vector<angleVertexPair> pairs(vertices.size());
-    auto getPositiveAngle = [](float alpha) { return alpha >= 0 ? alpha : static_cast<float>(2*M_PI) + alpha; };
     transform(vertices.begin(), vertices.end(), pairs.begin(),
-              [&](const Pixel3f& p) { return make_pair(getPositiveAngle(atan2(p.z(), p.y())), p); });
+              [&](const Pixel3f& p) { return make_pair(getPositiveAngle(p), p); });
     sort(pairs.begin(), pairs.end(),
          [](const angleVertexPair& a, const angleVertexPair& b) { return a.first < b.first; });
 
-    float angle = getPositiveAngle(atan2(pixel.z(), pixel.y()));
+    float angle = getPositiveAngle(pixel);
     angleVertexPair p1;
     angleVertexPair p2;
     bool debugTestPairFound = false;
@@ -213,21 +218,22 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
 
 void TransformORGB::hueScaling(const vector<Pixel3f>& source, vector<Pixel3f>& target)
 {
-    //index all pixel values
-    using indexVertexPair = pair<unsigned, Pixel3f>;
-    vector<indexVertexPair> indexed;
+    //index all pixels, keep them also tupled with length
+    using pixLenAngIndex = tuple<Pixel3f, float, float, unsigned>; //vertex, length, angle, index
+    vector<pixLenAngIndex> indexed;
     for (unsigned i = 0; i < source.size(); ++i)
     {
-        indexed.push_back(make_pair(i, source[i]));
+        indexed.push_back(make_tuple(source[i], source[i].length(), getPositiveAngle(source[i]), i));
     }
 
-    sort(indexed.begin(), indexed.end(), //sort pairs by pixel luma
-         [](indexVertexPair a, indexVertexPair b) {return pixelLuma(a.second) < pixelLuma(b.second);});
+    sort(indexed.begin(), indexed.end(), //sort tuples by pixel luma
+         [](pixLenAngIndex a, pixLenAngIndex b) {return pixelLuma(get<0>(a)) < pixelLuma(get<0>(b));});
 
     const float lumaStep = 1.f/255; //discretize luma to 255 planes
-    const float angleStep = static_cast<float>(2*M_PI)/3000; //discretize angle as in paper
+    const float angleStep = static_cast<float>(2*M_PI)/3000; //discretize angle very very as in paper
     for (float l = 0.f; l <= 1.f; l += lumaStep)
     {
+//        auto nextRange = find_if(indexed.begin(), indexed.end(), [&](pixLenAngIndex t){return pixelLuma(get<1>(t)) >= l;} );
         for (float a = 0.f; a < static_cast<float>(2*M_PI); a += angleStep)
         {
 
@@ -385,7 +391,7 @@ void TransformORGB::run(QString filePath)
     QImage targetImg(srcImg.width()*3, srcImg.height()*3, srcImg.format());
 
     vector<Pixel3f> hueModifiedPixels(pixels.size());
-    const auto hueShift = 0.15f;
+    const auto hueShift = 0.35f;
     for (int gr = -1; gr <= 1; ++gr)
     {//from green to red
         for (int by = -1; by <= 1; ++by)

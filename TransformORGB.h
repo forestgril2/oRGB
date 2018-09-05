@@ -1,6 +1,9 @@
 #ifndef TRANSFORMORGB_H
 #define TRANSFORMORGB_H
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include <QObject>
 #include <QMatrix4x4>
 #include <QImage>
@@ -36,6 +39,7 @@ private:
     static void prepareParalellepiped();
     static std::vector<unsigned> activeEdges(float pixelLuma);
     static std::vector<Pixel3f> hueBoundaryVertices(float pixelLuma);
+    static float getPositiveAngle(const Pixel3f& pixel);
     static Pixel3f clampHue(const Pixel3f& pixel);
 
     static void hueScaling(const std::vector<Pixel3f>& source, std::vector<Pixel3f>& target);

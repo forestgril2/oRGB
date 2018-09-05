@@ -18,7 +18,7 @@ Window {
     FileDialog {
         id: fileDialog
         title: "Please choose a file"
-        folder: "file:///home/space/Projects/oRGB"
+//        folder: "file:///home/space/Projects/oRGB"
         onAccepted: {
             console.log("You chose: " + fileDialog.fileUrls)
             oRGB.path = fileDialog.fileUrls[0]
