@@ -219,6 +219,62 @@ vector<TransformORGB::Pixel3f> TransformORGB::extractPixels(const QImage& image)
     return pixels;
 }
 
+void TransformORGB::toORGB(const vector<Pixel3f>& source, std::vector<Pixel3f>& target)
+{
+    //Transform to LCC
+    transform(source.begin(), source.end(), target.begin(),
+                   [&](Pixel3f p) {return Pixel3f(toLCC * p.toVector4D());} );
+
+    //Transform to oRGB
+    transform(source.begin(), source.end(), target.begin(),
+                   bind(hueRotation, placeholders::_1, compressHueAngle));
+}
+
+void TransformORGB::fromORGB(const vector<Pixel3f>& source, vector<Pixel3f>& target)
+{
+    //Transform back to LCC
+    transform(source.begin(), source.end(), target.begin(),
+                   bind(hueRotation, placeholders::_1, decompressHueAngle));
+
+    {//Make sure luma is in <0,1>
+        auto lumaMinMax = minmax_element(target.begin(), target.end(), ascendingLuma);
+
+        auto lMin = pixelLuma(*lumaMinMax.first);
+        auto lMax = pixelLuma(*lumaMinMax.second);
+
+        float aveLuma = (static_cast<float>(pow(target.size(), -1)) *
+                          accumulate(target.begin(), target.end(), 0,
+                                     [&](int sum, Pixel3f add){return sum + pixelLuma(add);}));
+
+        auto compressLuma = [&](Pixel3f& p) {
+            float l = pixelLuma(p);
+            float c1 = p.y();
+            float c2 = p.z();
+            float beta = 2.f/3.f;
+
+            if ((l > aveLuma) && (lMax > 1))
+            {
+                l = aveLuma + (1 - aveLuma) * static_cast<float>(pow((l - aveLuma)/(lMax - aveLuma), beta));
+                return Pixel3f(l, c1, c2);
+            }
+            else if ((l <= aveLuma) && (lMin < 1))
+            {
+                l = aveLuma * (1 - static_cast<float>(pow((l - aveLuma)/(lMin - aveLuma), beta)));
+                return Pixel3f(l, c1, c2);
+            }
+            return p;
+        };
+        transform(target.begin(), target.end(), target.begin(), compressLuma);
+    }
+
+    //clamp or scale hue, clamp for the beginning...
+    transform(target.begin(), target.end(), target.begin(), clampHue);
+
+    //Transform back to RGB
+    transform(target.begin(), target.end(), target.begin(),
+                   [&](Pixel3f p) {return Pixel3f(toLCC.inverted() * p.toVector4D());} );
+}
+
 void TransformORGB::fillImage(QImage& image, const vector<QVector3D>& floatPixels)
 {
     QVector3D pixelRGB;
@@ -282,64 +338,12 @@ void TransformORGB::run(QString filePath)
     }
 
     auto pixels = extractPixels(image);
-
-    //Transform to LCC
-    transform(pixels.begin(), pixels.end(), pixels.begin(),
-                   [&](Pixel3f p) {return Pixel3f(toLCC * p.toVector4D());} );
-
-
-
-    //Transform to oRGB
-    transform(pixels.begin(), pixels.end(), pixels.begin(),
-                   bind(hueRotation, placeholders::_1, compressHueAngle));
-
+    toORGB(pixels, pixels);
     //Adjust hue
     transform(pixels.begin(), pixels.end(), pixels.begin(),
-                   [&](Pixel3f p) {return Pixel3f(p.x(), p.y()+0.2, p.z());});
+                   [&](Pixel3f p) {return Pixel3f(p.x(), p.y(), p.z()-0.2);});
 
-    //Transform back to LCC
-    transform(pixels.begin(), pixels.end(), pixels.begin(),
-                   bind(hueRotation, placeholders::_1, decompressHueAngle));
-
-    {//Make sure luma is in <0,1>
-        auto lumaMinMax = minmax_element(pixels.begin(), pixels.end(), ascendingLuma);
-
-        auto lMin = pixelLuma(*lumaMinMax.first);
-        auto lMax = pixelLuma(*lumaMinMax.second);
-
-        float aveLuma = (static_cast<float>(pow(pixels.size(), -1)) *
-                          accumulate(pixels.begin(), pixels.end(), 0,
-                                     [&](int sum, Pixel3f add){return sum + pixelLuma(add);}));
-
-        auto compressLuma = [&](Pixel3f& p) {
-            float l = pixelLuma(p);
-            float c1 = p.y();
-            float c2 = p.z();
-            float beta = 2.f/3.f;
-
-            if ((l > aveLuma) && (lMax > 1))
-            {
-                l = aveLuma + (1 - aveLuma) * static_cast<float>(pow((l - aveLuma)/(lMax - aveLuma), beta));
-                return Pixel3f(l, c1, c2);
-            }
-            else if ((l <= aveLuma) && (lMin < 1))
-            {
-                l = aveLuma * (1 - static_cast<float>(pow((l - aveLuma)/(lMin - aveLuma), beta)));
-                return Pixel3f(l, c1, c2);
-            }
-            return p;
-        };
-        transform(pixels.begin(), pixels.end(), pixels.begin(), compressLuma);
-    }
-
-    //clamp or scale hue, clamp for the beginning...
-    transform(pixels.begin(), pixels.end(), pixels.begin(), clampHue);
-
-    //Transform back to RGB
-    transform(pixels.begin(), pixels.end(), pixels.begin(),
-                   [&](Pixel3f p) {return Pixel3f(toLCC.inverted() * p.toVector4D());} );
-
-
+    fromORGB(pixels, pixels);
     fillImage(image, pixels);
 
     QString transformedPath = truncatedPath;
