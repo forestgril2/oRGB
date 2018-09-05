@@ -211,6 +211,30 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
     return ret;
 }
 
+void TransformORGB::hueScaling(const vector<Pixel3f>& source, vector<Pixel3f>& target)
+{
+    //index all pixel values
+    using indexVertexPair = pair<unsigned, Pixel3f>;
+    vector<indexVertexPair> indexed;
+    for (unsigned i = 0; i < source.size(); ++i)
+    {
+        indexed.push_back(make_pair(i, source[i]));
+    }
+
+    sort(indexed.begin(), indexed.end(), //sort pairs by pixel luma
+         [](indexVertexPair a, indexVertexPair b) {return pixelLuma(a.second) < pixelLuma(b.second);});
+
+    const float lumaStep = 1.f/255; //discretize luma to 255 planes
+    const float angleStep = static_cast<float>(2*M_PI)/3000; //discretize angle as in paper
+    for (float l = 0.f; l <= 1.f; l += lumaStep)
+    {
+        for (float a = 0.f; a < static_cast<float>(2*M_PI); a += angleStep)
+        {
+
+        }
+    }
+}
+
 vector<TransformORGB::Pixel3f> TransformORGB::extractPixels(const QImage& image)
 {
     vector<Pixel3f> pixels;
