@@ -347,14 +347,21 @@ void TransformORGB::run(QString filePath)
 
     auto pixels = extractPixels(srcImg);
     toORGB(pixels, pixels);
-    //Adjust hue
-    transform(pixels.begin(), pixels.end(), pixels.begin(),
-                   [&](Pixel3f p) {return Pixel3f(p.x(), p.y(), p.z() -0.2);});
-
-    fromORGB(pixels, pixels);
 
     QImage targetImg(srcImg.width()*3, srcImg.height()*3, srcImg.format());
-    writeToImage(targetImg, pixels, srcImg.width(), srcImg.height(), srcImg.width());
+
+    vector<Pixel3f> hueModifiedPixels(pixels.size());
+    const auto hueShift = 0.15f;
+    for (int gr = -1; gr <= 1; ++gr)
+    {//from green to red
+        for (int by = -1; by <= 1; ++by)
+        {//from blue to yellow
+            transform(pixels.begin(), pixels.end(), hueModifiedPixels.begin(),
+                           [&](Pixel3f p) {return Pixel3f(p.x(), p.y() + by*hueShift, p.z() - gr*hueShift);});
+            fromORGB(hueModifiedPixels, hueModifiedPixels);
+            writeToImage(targetImg, hueModifiedPixels, srcImg.width()*(1+by), srcImg.height()*(1+gr), srcImg.width());
+        }
+    }
 
     QString transformedPath = truncatedPath;
     int dotPosition = truncatedPath.indexOf(".");
