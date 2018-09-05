@@ -40,7 +40,8 @@ private:
     static std::vector<unsigned> activeEdges(float pixelLuma);
     static std::vector<Pixel3f> hueBoundaryVertices(float pixelLuma);
     static float getPositiveAngle(const Pixel3f& pixel);
-    static Pixel3f clampHue(const Pixel3f& pixel);
+    static Pixel3f clampHue(const Pixel3f& pixel, float lumaParam, float angleParam);
+    static Pixel3f clampPixelHue(const Pixel3f& pixel);
 
     static void hueScaling(const std::vector<Pixel3f>& source, std::vector<Pixel3f>& target);
 

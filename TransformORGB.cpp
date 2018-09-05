@@ -123,24 +123,32 @@ float TransformORGB::getPositiveAngle(const Pixel3f& pixel)
     return angle >= 0 ? angle : static_cast<float>(2*M_PI) + angle;
 }
 
-TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
+TransformORGB::Pixel3f TransformORGB::clampPixelHue(const Pixel3f& pixel)
+{
+    float angle = getPositiveAngle(pixel);
+    float luma = pixelLuma(pixel);
+
+    return clampHue(pixel, luma, angle);
+}
+
+TransformORGB::Pixel3f TransformORGB::clampHue(const TransformORGB::Pixel3f &pixel, float luma, float angle)
 {
     if (qFuzzyCompare(pixel.y(), 0) && qFuzzyCompare(pixel.y(), 0))
     {//handle special case, neutral grey hue, always inside the paralellepiped
-        return pixel;
+        return Pixel3f(luma,0,0);
     }
 
-    if (qFuzzyCompare(pixelLuma(pixel), 1.f))
+    if (qFuzzyCompare(luma, 1.f))
     {//for maximal luma, we have full white, neutral
         return Pixel3f(1,0,0);
     }
 
-    if (qFuzzyCompare(pixelLuma(pixel), 0.f))
+    if (qFuzzyCompare(luma, 0.f))
     {//for minimal luma, we have total black, neutral
         return Pixel3f(0,0,0);
     }
 
-    auto vertices = hueBoundaryVertices(pixel.x());
+    auto vertices = hueBoundaryVertices(luma);
     using angleVertexPair = pair<float, Pixel3f>;
     vector<angleVertexPair> pairs(vertices.size());
     transform(vertices.begin(), vertices.end(), pairs.begin(),
@@ -148,7 +156,6 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
     sort(pairs.begin(), pairs.end(),
          [](const angleVertexPair& a, const angleVertexPair& b) { return a.first < b.first; });
 
-    float angle = getPositiveAngle(pixel);
     angleVertexPair p1;
     angleVertexPair p2;
     bool debugTestPairFound = false;
@@ -218,26 +225,79 @@ TransformORGB::Pixel3f TransformORGB::clampHue(const Pixel3f& pixel)
 
 void TransformORGB::hueScaling(const vector<Pixel3f>& source, vector<Pixel3f>& target)
 {
-    //index all pixels, keep them also tupled with length
-    using pixLenAngIndex = tuple<Pixel3f, float, float, unsigned>; //vertex, length, angle, index
-    vector<pixLenAngIndex> indexed;
+    //index all pixels, keep them also tupled with length and angle
+    using PixLenAngIndex = tuple<Pixel3f, float, float, unsigned>; //vertex, hue length squared, angle, index
+    vector<PixLenAngIndex> pixData;
+    auto hueLenSqr = [](Pixel3f p) {return p.y()*p.y() + p.z()*p.z();};
     for (unsigned i = 0; i < source.size(); ++i)
     {
-        indexed.push_back(make_tuple(source[i], source[i].length(), getPositiveAngle(source[i]), i));
+        pixData.push_back(make_tuple(source[i], hueLenSqr(source[i]), getPositiveAngle(source[i]), i));
     }
 
-    sort(indexed.begin(), indexed.end(), //sort tuples by pixel luma
-         [](pixLenAngIndex a, pixLenAngIndex b) {return pixelLuma(get<0>(a)) < pixelLuma(get<0>(b));});
+    sort(pixData.begin(), pixData.end(), //sort tuples by pixel luma
+         [](PixLenAngIndex a, PixLenAngIndex b) {return pixelLuma(get<0>(a)) < pixelLuma(get<0>(b));});
 
-    const float lumaStep = 1.f/255; //discretize luma to 255 planes
-    const float angleStep = static_cast<float>(2*M_PI)/3000; //discretize angle very very as in paper
+    const float lumaStep = 1.f/255; //discretize luma to 255 plane slices (number not specified in paper)
+    const float angleStep = static_cast<float>(2*M_PI)/3000; //discretize angle very finely as in paper
+
+    auto planeSliceBegin = pixData.begin();
+    auto nextPlaneSlice = planeSliceBegin;
+    auto angleSliceBegin = planeSliceBegin;
+    auto nextAngleSlice = planeSliceBegin;
+
+    Pixel3f maxHueLen;
+    Pixel3f maxHueClamped;
+    float maxHueLenSqr;
+    float maxHueClampLenSqr;
+    float scaleRatio;
+
     for (float l = 0.f; l <= 1.f; l += lumaStep)
     {
-//        auto nextRange = find_if(indexed.begin(), indexed.end(), [&](pixLenAngIndex t){return pixelLuma(get<1>(t)) >= l;} );
+        nextPlaneSlice = find_if(planeSliceBegin, pixData.end(), //find range of this luma slice
+                                 [&](PixLenAngIndex t) { return pixelLuma(get<0>(t)) >= l + lumaStep; } );
+
+        sort(planeSliceBegin, nextPlaneSlice, // sort by angle within the luma slice
+             [](const PixLenAngIndex& a, const PixLenAngIndex& b) {return get<2>(a) < get<2>(b);});
+
+        angleSliceBegin = planeSliceBegin;
         for (float a = 0.f; a < static_cast<float>(2*M_PI); a += angleStep)
         {
+            nextAngleSlice = find_if(angleSliceBegin, nextPlaneSlice, //find range of this angle slice within luma slice
+                                     [&](PixLenAngIndex t) { return get<2>(t) >= a + angleStep; } );
 
+            maxHueLen = get<0>(*max_element(angleSliceBegin, nextAngleSlice, //find max hue within this luma-angle slice
+                               [](const PixLenAngIndex& a, const PixLenAngIndex& b) {return get<1>(a) < get<1>(b);}));
+
+            maxHueClamped = clampHue(maxHueLen, l + 0.5f*lumaStep, a + 0.5f*angleStep);
+
+            maxHueLenSqr = hueLenSqr(maxHueLen);
+            maxHueClampLenSqr = hueLenSqr(maxHueClamped);
+
+            if (maxHueClampLenSqr < maxHueLenSqr)
+            {//it was clamped, scale this slice down
+                scaleRatio = sqrt(maxHueClampLenSqr)/sqrt(maxHueLenSqr);
+
+                transform(angleSliceBegin, nextAngleSlice, angleSliceBegin,
+                          [&](PixLenAngIndex& t)
+                          {
+                                float y = scaleRatio*get<0>(t).y();
+                                float z = scaleRatio*get<0>(t).z();
+                                get<0>(t).setY(y);
+                                get<0>(t).setZ(z);
+                          });
+            }
+            angleSliceBegin = nextAngleSlice;
         }
+        planeSliceBegin = nextPlaneSlice;
+    }
+
+    sort(pixData.begin(), pixData.end(), //sort tuples by pixel index
+         [](PixLenAngIndex a, PixLenAngIndex b) {return get<3>(a) < get<3>(b);});
+
+    //write all modified pixels to target
+    for (unsigned i = 0; i < pixData.size(); ++i)
+    {
+        target[i] = get<0>(pixData[i]);
     }
 }
 
@@ -307,8 +367,9 @@ void TransformORGB::fromORGB(const vector<Pixel3f>& source, vector<Pixel3f>& tar
         transform(target.begin(), target.end(), target.begin(), compressLuma);
     }
 
-    //clamp or scale hue, clamp for the beginning...
-    transform(target.begin(), target.end(), target.begin(), clampHue);
+    //clamp or scale hue
+    //transform(target.begin(), target.end(), target.begin(), clampPixelHue);
+    hueScaling(target, target);
 
     //Transform back to RGB
     transform(target.begin(), target.end(), target.begin(),
@@ -398,6 +459,7 @@ void TransformORGB::run(QString filePath)
         {//from blue to yellow
             transform(pixels.begin(), pixels.end(), hueModifiedPixels.begin(),
                            [&](Pixel3f p) {return Pixel3f(p.x(), p.y() + by*hueShift, p.z() - gr*hueShift);});
+
             fromORGB(hueModifiedPixels, hueModifiedPixels);
             writeToImage(targetImg, hueModifiedPixels, srcImg.width()*(1+by), srcImg.height()*(1+gr), srcImg.width());
         }
