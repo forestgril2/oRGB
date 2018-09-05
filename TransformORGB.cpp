@@ -352,14 +352,17 @@ void TransformORGB::run(QString filePath)
 
     vector<Pixel3f> hueModifiedPixels(pixels.size());
     const auto hueShift = 0.15f;
-    for (int gr = -1; gr <= 1; ++gr)
+    for (int gr = 0; gr <= 0; ++gr)
     {//from green to red
-        for (int by = -1; by <= 1; ++by)
+        for (int by = 1; by <= 1; ++by)
         {//from blue to yellow
             transform(pixels.begin(), pixels.end(), hueModifiedPixels.begin(),
                            [&](Pixel3f p) {return Pixel3f(p.x(), p.y() + by*hueShift, p.z() - gr*hueShift);});
             fromORGB(hueModifiedPixels, hueModifiedPixels);
-            writeToImage(targetImg, hueModifiedPixels, srcImg.width()*(1+by), srcImg.height()*(1+gr), srcImg.width());
+            writeToImage(targetImg, hueModifiedPixels,
+                         static_cast<unsigned>(srcImg.width()*(1+by)),
+                         static_cast<unsigned>(srcImg.height()*(1+gr)),
+                         static_cast<unsigned>(srcImg.width()));
         }
     }
 
