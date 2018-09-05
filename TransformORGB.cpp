@@ -240,10 +240,10 @@ void TransformORGB::hueScaling(const vector<Pixel3f>& source, vector<Pixel3f>& t
     const float lumaStep = 1.f/255; //discretize luma to 255 plane slices (number not specified in paper)
     const float angleStep = static_cast<float>(2*M_PI)/3000; //discretize angle very finely as in paper
 
-    auto planeSliceBegin = pixData.begin();
-    auto nextPlaneSlice = planeSliceBegin;
-    auto angleSliceBegin = planeSliceBegin;
-    auto nextAngleSlice = planeSliceBegin;
+    vector<PixLenAngIndex>::iterator planeSliceBegin = pixData.begin();
+    vector<PixLenAngIndex>::iterator nextPlaneSlice;
+    vector<PixLenAngIndex>::iterator angleSliceBegin;
+    vector<PixLenAngIndex>::iterator nextAngleSlice;
 
     Pixel3f maxHueLen;
     Pixel3f maxHueClamped;
@@ -284,6 +284,8 @@ void TransformORGB::hueScaling(const vector<Pixel3f>& source, vector<Pixel3f>& t
                                 float z = scaleRatio*get<0>(t).z();
                                 get<0>(t).setY(y);
                                 get<0>(t).setZ(z);
+
+                                return make_tuple(get<0>(t), get<1>(t), get<2>(t), get<3>(t));
                           });
             }
             angleSliceBegin = nextAngleSlice;
